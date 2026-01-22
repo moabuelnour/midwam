@@ -49,6 +49,11 @@ export default async (req, res) => {
       const emailPass = process.env.CONTACT_EMAIL_PASS || "zqickmgtugxhrzxo";
       const emailTo = process.env.CONTACT_EMAIL_TO || emailUser;
 
+      // Validate credentials are present
+      if (!emailUser || !emailPass) {
+        throw new Error("Email credentials are missing. Please set CONTACT_EMAIL_USER and CONTACT_EMAIL_PASS environment variables.");
+      }
+
       const transporter = nodemailer.createTransport({
         service: "gmail",
         auth: {
@@ -61,7 +66,12 @@ export default async (req, res) => {
       });
 
       // Verify transporter configuration
-      await transporter.verify();
+      try {
+        await transporter.verify();
+      } catch (verifyError) {
+        console.error("[Contact Form] Transporter verification failed:", verifyError.message);
+        // Don't throw here, let it try to send anyway
+      }
 
       const mailOptions = {
         from: `"Website Contact Form" <${emailUser}>`,
@@ -98,10 +108,19 @@ export default async (req, res) => {
       console.error("[Contact Form] Error:", e.message);
       console.error("[Contact Form] Stack:", e.stack);
       
+      // Provide more helpful error messages for authentication issues
+      let errorMessage = "Failed to send email. Please try again later.";
+      if (e.message && e.message.includes("authentication")) {
+        errorMessage = "Email authentication failed. Please check email credentials in environment variables.";
+        console.error("[Contact Form] Authentication error - check CONTACT_EMAIL_USER and CONTACT_EMAIL_PASS");
+      } else if (process.env.NODE_ENV === "development") {
+        errorMessage = e.message;
+      }
+      
       res.statusCode = 500;
       res.end(JSON.stringify({ 
         success: false, 
-        error: process.env.NODE_ENV === "development" ? e.message : "Failed to send email. Please try again later." 
+        error: errorMessage
       }));
     }
   });
