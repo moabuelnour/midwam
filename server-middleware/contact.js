@@ -55,6 +55,9 @@ export default async (req, res) => {
           user: emailUser,
           pass: emailPass.trim()
         },
+        tls: {
+          rejectUnauthorized: false
+        }
       });
 
       // Verify transporter configuration
