@@ -111,7 +111,8 @@ export default async (req, res) => {
       // Provide more helpful error messages for authentication issues
       let errorMessage = "Failed to send email. Please try again later.";
       if (e.message && e.message.includes("authentication")) {
-        errorMessage = "Email authentication failed. Please check email credentials in environment variables.";
+        // errorMessage = "Email authentication failed. Please check email credentials in environment variables.";
+        errorMessage = "Failed to send email. Please try again later.";
         console.error("[Contact Form] Authentication error - check CONTACT_EMAIL_USER and CONTACT_EMAIL_PASS");
       } else if (process.env.NODE_ENV === "development") {
         errorMessage = e.message;
