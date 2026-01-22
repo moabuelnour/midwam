@@ -10,6 +10,7 @@
           type="text"
           placeholder="Your Name"
           required
+          :disabled="isLoading"
         />
       </div>
       <div class="form-group">
@@ -20,6 +21,7 @@
           type="email"
           placeholder="Your Email"
           required
+          :disabled="isLoading"
         />
       </div>
       <div class="form-group">
@@ -29,13 +31,14 @@
           id="message"
           placeholder="Your Message"
           required
+          :disabled="isLoading"
         ></textarea>
       </div>
     </div>
   
     <div class="form-actions">
-      <button type="submit" class="button-fix">
-        Send a message
+      <button type="submit" class="button-fix" :disabled="isLoading">
+        {{ isLoading ? 'Sending...' : 'Send a message' }}
         <!-- <ButtonUnderlined class="button-cta">Send a message</ButtonUnderlined> -->
       </button>
     </div>

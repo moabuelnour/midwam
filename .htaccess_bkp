@@ -1,0 +1,21 @@
+RewriteEngine On
+RewriteCond %{SERVER_PORT} 80
+RewriteRule ^index.php(.*) https://web.midwam.com:8000/$1 [P,L]
+RewriteRule (.*) https://web.midwam.com:8000/$1 [P,L]
+
+# # RewriteRule ^index.php(.*) https://midwam.com:8000/$1 [P,L]
+# # RewriteRule (.*) https://midwam.com:8000/$1 [P,L]
+
+# RewriteEngine On
+# RewriteBase /
+
+# # Exclude requests to 'api.midwam.com' folder
+# RewriteCond %{REQUEST_URI} !^/api.midwam.com/
+
+# # Redirect all other requests to the 'web.midwam.com' folder
+# RewriteCond %{REQUEST_URI} !^/web.midwam.com/
+# RewriteRule ^(.*)$ /web.midwam.com/$1 [L]
+
+# # Redirect root to 'web.midwam.com'
+# RewriteCond %{REQUEST_URI} ^/$
+# RewriteRule ^ /web.midwam.com/ [L]

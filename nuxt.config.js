@@ -1,6 +1,12 @@
 export default {
     loading: false,
 
+    render: {
+      bundleRenderer: {
+	 timeout: 10000
+	 } 
+     },
+
     env: {
         BASE_URL_API: process.env.BASE_URL_API,
         BASE_URL_FRONTEND: process.env.BASE_URL_FRONTEND,
@@ -66,7 +72,7 @@ export default {
      ** Plugins to load before mounting the App
      ** https://nuxtjs.org/guide/plugins
      */
-     plugins: ['@/plugins/copyright.server.js', '@/plugins/vconsole.client.js', { src:'@/plugins/three.client.js', mode: 'client'}],
+     plugins: ['@/plugins/copyright.server.js', { src:'@/plugins/three.client.js', mode: 'client'}],
     /*
      ** Auto import components
      ** See https://nuxtjs.org/api/configuration-components
@@ -172,11 +178,11 @@ export default {
     },
 
     serverMiddleware: [
-        { path: "/api/contact", handler: "@server-middleware/contact.js" }
+        { path: "/api/contact", handler: "~/server-middleware/contact.js" }
     ],
 
     server: {
-        port: 8000,
+        port: 3000,
         host: '0.0.0.0',
     },
 };

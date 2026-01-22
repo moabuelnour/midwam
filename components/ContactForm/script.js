@@ -13,12 +13,16 @@ export default {
         },
         submissionSuccess: false,
         errorMessage: "",
+        isLoading: false,
       };
     },
     methods: {
       async handleSubmit() {
+        if (this.isLoading) return;
+        
         this.errorMessage = "";
         this.submissionSuccess = false;
+        this.isLoading = true;
       
         try {
           const res = await fetch("/api/contact", {
@@ -42,6 +46,8 @@ export default {
           }
         } catch (err) {
           this.errorMessage = "Network error. Try again.";
+        } finally {
+          this.isLoading = false;
         }
       }
       

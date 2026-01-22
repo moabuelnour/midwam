@@ -1,4 +1,8 @@
-RewriteEngine on
-RewriteCond %{HTTP_HOST} ^web\.midwam\.com$ [OR]
-RewriteCond %{HTTP_HOST} ^www\.web\.midwam\.com$
-RewriteRule ^/?$ "https\:\/\/www\.midwam\.com\/en\/" [R=301,L]
+# ❌ Disable Passenger completely (this stops the rogue Nuxt process)
+PassengerEnabled off
+
+# ✔ Ensure Apache processes this file
+Options -MultiViews
+
+# ✔ No proxying here (proxying is done in ROOT domain .htaccess)
+RewriteEngine Off

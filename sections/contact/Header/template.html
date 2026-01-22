@@ -27,22 +27,22 @@
                 <form @submit.prevent="handleSubmit">
 
                     <div class="input-group">
-                        <input v-model="formData.firstName" type="text" placeholder="First Name" required>
-                        <input v-model="formData.lastName" type="text" placeholder="Last Name" required>
+                        <input v-model="formData.firstName" type="text" placeholder="First Name" required :disabled="isLoading">
+                        <input v-model="formData.lastName" type="text" placeholder="Last Name" required :disabled="isLoading">
                     </div>
 
                     <div class="input-group">
-                        <input v-model="formData.email" type="email" placeholder="Email Address" required>
-                        <input v-model="formData.phone" type="tel" placeholder="Contact Number">
+                        <input v-model="formData.email" type="email" placeholder="Email Address" required :disabled="isLoading">
+                        <input v-model="formData.phone" type="tel" placeholder="Contact Number" :disabled="isLoading">
                     </div>
 
                     <div class="input-group">
-                        <textarea v-model="formData.message" cols="30" rows="4" placeholder="Your Message"></textarea>
+                        <textarea v-model="formData.message" cols="30" rows="4" placeholder="Your Message" :disabled="isLoading"></textarea>
                     </div>
 
                     <div class="cf-btn-broup">
-                        <button type="submit" class="button-fix">
-                            Send a message
+                        <button type="submit" class="button-fix" :disabled="isLoading">
+                            {{ isLoading ? 'Sending...' : 'Send a message' }}
                         </button>
                     </div>
 

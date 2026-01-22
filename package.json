@@ -8,7 +8,7 @@
     },
     "scripts": {
         "clean": "rimraf .nuxt",
-        "dev": "npm run clean && copy .env.local .env && node --max-old-space-size=16384 node_modules/nuxt/bin/nuxt.js",
+        "dev": "npm run clean && cp .env.local .env && node --max-old-space-size=16384 node_modules/nuxt/bin/nuxt.js",
         "build": "cp .env.local .env && nuxt build",
         "buildlocal": "copy .env.local .env && nuxt build",
         "build:staging": "copy .env.staging .env && nuxt build -c nuxt.config.staging.js",
