@@ -1,4 +1,52 @@
 import nodemailer from "nodemailer";
+import { readFileSync } from "fs";
+import { resolve } from "path";
+
+// Explicitly load .env file for server middleware context
+// This ensures environment variables are available at runtime, especially with PM2
+function loadEnvFile() {
+  try {
+    const envPath = resolve(process.cwd(), ".env");
+    const envFile = readFileSync(envPath, "utf8");
+    // Handle both Unix and Windows line endings
+    const envLines = envFile.split(/\r?\n/);
+    
+    envLines.forEach((line) => {
+      const trimmedLine = line.trim();
+      // Skip empty lines and comments
+      if (!trimmedLine || trimmedLine.startsWith("#")) {
+        return;
+      }
+      
+      const equalIndex = trimmedLine.indexOf("=");
+      if (equalIndex > 0) {
+        const key = trimmedLine.substring(0, equalIndex).trim();
+        let value = trimmedLine.substring(equalIndex + 1).trim();
+        
+        // Remove quotes if present
+        if ((value.startsWith('"') && value.endsWith('"')) || 
+            (value.startsWith("'") && value.endsWith("'"))) {
+          value = value.slice(1, -1);
+        }
+        
+        // Only set if not already in process.env (env vars take precedence)
+        if (!process.env[key]) {
+          process.env[key] = value;
+        }
+      }
+    });
+    
+    console.log("[Contact Form] .env file loaded successfully");
+  } catch (error) {
+    // .env file might not exist or be readable, that's okay
+    // Environment variables might be set via PM2 or system
+    console.warn("[Contact Form] Could not load .env file:", error.message);
+    console.warn("[Contact Form] Make sure .env file exists in:", resolve(process.cwd(), ".env"));
+  }
+}
+
+// Load environment variables
+loadEnvFile();
 
 export default async (req, res) => {
   // Set CORS headers
@@ -45,20 +93,24 @@ export default async (req, res) => {
       const phone = data.phone || "Not provided";
 
       // Get email credentials from environment variables or use defaults
-      const emailUser = process.env.CONTACT_EMAIL_USER || "trivedibhavya1997@gmail.com";
-      const emailPass = process.env.CONTACT_EMAIL_PASS || "zqickmgtugxhrzxo";
-      const emailTo = process.env.CONTACT_EMAIL_TO || emailUser;
+      const emailUser = (process.env.CONTACT_EMAIL_USER || "trivedibhavya1997@gmail.com").trim();
+      const emailPass = (process.env.CONTACT_EMAIL_PASS || "zqickmgtugxhrzxo").trim();
+      const emailTo = (process.env.CONTACT_EMAIL_TO || emailUser).trim();
 
       // Validate credentials are present
       if (!emailUser || !emailPass) {
         throw new Error("Email credentials are missing. Please set CONTACT_EMAIL_USER and CONTACT_EMAIL_PASS environment variables.");
       }
 
+      // Log that we're using environment variables (without exposing sensitive data)
+      const usingEnvVars = !!(process.env.CONTACT_EMAIL_USER && process.env.CONTACT_EMAIL_PASS);
+      console.log(`[Contact Form] Using ${usingEnvVars ? 'environment variables' : 'default credentials'} for email: ${emailUser.substring(0, 3)}***`);
+
       const transporter = nodemailer.createTransport({
         service: "gmail",
         auth: {
           user: emailUser,
-          pass: emailPass.trim()
+          pass: emailPass
         },
         tls: {
           rejectUnauthorized: false
@@ -110,10 +162,19 @@ export default async (req, res) => {
       
       // Provide more helpful error messages for authentication issues
       let errorMessage = "Failed to send email. Please try again later.";
-      if (e.message && e.message.includes("authentication")) {
-        // errorMessage = "Email authentication failed. Please check email credentials in environment variables.";
+      const isAuthError = e.message && (
+        e.message.includes("authentication") || 
+        e.message.includes("Invalid login") ||
+        e.message.includes("535")
+      );
+      
+      if (isAuthError) {
         errorMessage = "Failed to send email. Please try again later.";
-        console.error("[Contact Form] Authentication error - check CONTACT_EMAIL_USER and CONTACT_EMAIL_PASS");
+        console.error("[Contact Form] Authentication error detected");
+        console.error("[Contact Form] Check that CONTACT_EMAIL_USER and CONTACT_EMAIL_PASS are set correctly in production");
+        console.error("[Contact Form] Email user:", process.env.CONTACT_EMAIL_USER ? `${process.env.CONTACT_EMAIL_USER.substring(0, 3)}***` : "NOT SET");
+        console.error("[Contact Form] Email pass:", process.env.CONTACT_EMAIL_PASS ? "SET (length: " + process.env.CONTACT_EMAIL_PASS.length + ")" : "NOT SET");
+        console.error("[Contact Form] Using .env file:", process.env.CONTACT_EMAIL_USER ? "No (using process.env)" : "Yes (or defaults)");
       } else if (process.env.NODE_ENV === "development") {
         errorMessage = e.message;
       }
