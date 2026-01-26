@@ -102,7 +102,7 @@ export default async (req, res) => {
       const emailPass = emailPassRaw.trim();
       const emailTo = (process.env.CONTACT_EMAIL_TO || emailUser).trim();
       const emailHost = (process.env.CONTACT_EMAIL_HOST || "smtp.zoho.com").trim();
-      const emailPort = (process.env.CONTACT_EMAIL_PORT || 587);
+      const emailPort = parseInt(process.env.CONTACT_EMAIL_PORT || 587, 10);
       
       // Debug: Check raw password before processing
       console.log(`[Contact Form] Raw password from env: length=${emailPassRaw.length}, hasWhitespace=${/\s/.test(emailPassRaw)}`);
@@ -143,7 +143,9 @@ export default async (req, res) => {
       // Zoho SMTP configuration
       // Port 465 uses SSL (secure: true)
       // Port 587 uses STARTTLS (secure: false, requireTLS: true)
-      const isSecurePort = emailPort === 465;
+      // Ensure port is a number for comparison
+      const portNum = parseInt(emailPort, 10);
+      const isSecurePort = portNum === 465;
       
       // Normalize credentials - remove any hidden characters
       const normalizedUser = emailUser.trim().replace(/[\r\n\t]/g, '');
@@ -159,8 +161,8 @@ export default async (req, res) => {
       // Try different authentication methods - Zoho sometimes requires specific format
       const transporter = nodemailer.createTransport({
         host: emailHost,
-        port: emailPort,
-        secure: isSecurePort, // true for 465, false for other ports
+        port: portNum, // Use numeric port
+        secure: isSecurePort, // true for 465 (SSL), false for 587 (STARTTLS)
         auth: {
           user: normalizedUser,  // Full email address for Zoho (e.g., it@domain.com)
           pass: normalizedPass   // Zoho App Password (12 chars, no spaces)
@@ -179,7 +181,7 @@ export default async (req, res) => {
       });
       
       // Log configuration for debugging (without exposing password)
-      console.log(`[Contact Form] SMTP Config: ${emailHost}:${emailPort}, secure: ${isSecurePort}, authMethod: PLAIN`);
+      console.log(`[Contact Form] SMTP Config: ${emailHost}:${portNum}, secure: ${isSecurePort} (${isSecurePort ? 'SSL' : 'STARTTLS'}), authMethod: PLAIN`);
       console.log(`[Contact Form] Email user: ${normalizedUser.substring(0, 3)}***@${normalizedUser.split('@')[1] || 'unknown'}`);
       console.log(`[Contact Form] Password length: ${normalizedPass.length} chars`);
       console.log(`[Contact Form] Password is exactly 12 chars: ${normalizedPass.length === 12}`);
