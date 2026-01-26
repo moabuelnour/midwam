@@ -119,16 +119,21 @@ export default async (req, res) => {
       // console.log("[Contact Form] Using email user:", emailUser);
       // console.log("[Contact Form] Password length:", emailPass ? emailPass.length : 0);
       // console.log("[Contact Form] Sending to:", emailTo);
+      // Zoho App Passwords are 12 characters (displayed with spaces like "RGRW EAps v6qL", but stored without)
+      // Remove any spaces from the password
+      const cleanedPass = emailPass.replace(/\s+/g, '');
+      const passLength = cleanedPass.length;
+      
       // Validate credentials are present
-      if (!emailUser || !emailPass) {
+      if (!emailUser || !cleanedPass) {
         throw new Error("Email credentials are missing. Please set CONTACT_EMAIL_USER and CONTACT_EMAIL_PASS environment variables.");
       }
-
-      // Warn if password length suggests it's not a Zoho App Password
-      const passLength = emailPass.trim().length;
-      if (passLength !== 16) {
-        console.warn(`[Contact Form] WARNING: Password length is ${passLength} characters. Zoho App Passwords are typically 16 characters.`);
+      
+      if (passLength !== 12) {
+        console.warn(`[Contact Form] WARNING: Password length is ${passLength} characters after removing spaces. Zoho App Passwords are 12 characters.`);
         console.warn(`[Contact Form] If you're using a regular password, it won't work. Generate an App Password at: https://accounts.zoho.com/home#security/app-passwords`);
+      } else {
+        console.log(`[Contact Form] Password length is correct (12 characters) for Zoho App Password`);
       }
 
       // Log that we're using environment variables (without exposing sensitive data)
@@ -142,19 +147,25 @@ export default async (req, res) => {
       
       // Normalize credentials - remove any hidden characters
       const normalizedUser = emailUser.trim().replace(/[\r\n\t]/g, '');
-      // For password, be more careful - only remove actual line breaks, not all whitespace
-      const normalizedPass = emailPass.replace(/[\r\n]/g, '').trim();
+      // For password, remove line breaks and ensure it's clean (spaces already removed above)
+      const normalizedPass = cleanedPass.replace(/[\r\n\t]/g, '').trim();
       
+      // Additional debugging - check what we're actually sending
       console.log(`[Contact Form] After normalization - User length: ${normalizedUser.length}, Pass length: ${normalizedPass.length}`);
+      console.log(`[Contact Form] User email format: ${normalizedUser.includes('@') ? 'Valid (contains @)' : 'INVALID (no @)'}`);
+      console.log(`[Contact Form] User domain: ${normalizedUser.split('@')[1] || 'NONE'}`);
+      console.log(`[Contact Form] Password is alphanumeric only: ${/^[a-zA-Z0-9]+$/.test(normalizedPass)}`);
       
+      // Try different authentication methods - Zoho sometimes requires specific format
       const transporter = nodemailer.createTransport({
         host: emailHost,
         port: emailPort,
         secure: isSecurePort, // true for 465, false for other ports
         auth: {
           user: normalizedUser,  // Full email address for Zoho (e.g., it@domain.com)
-          pass: normalizedPass   // Zoho App Password (NOT regular password - must be generated in Zoho settings)
+          pass: normalizedPass   // Zoho App Password (12 chars, no spaces)
         },
+        authMethod: 'PLAIN', // Explicitly use PLAIN auth method
         tls: {
           rejectUnauthorized: false,
           minVersion: 'TLSv1.2'
@@ -162,16 +173,16 @@ export default async (req, res) => {
         // For port 587 (STARTTLS)
         ...(isSecurePort ? {} : { requireTLS: true }),
         // Connection timeout
-        connectionTimeout: 10000,
-        greetingTimeout: 10000,
-        socketTimeout: 10000
+        connectionTimeout: 15000,
+        greetingTimeout: 15000,
+        socketTimeout: 15000
       });
       
       // Log configuration for debugging (without exposing password)
-      console.log(`[Contact Form] SMTP Config: ${emailHost}:${emailPort}, secure: ${isSecurePort}`);
+      console.log(`[Contact Form] SMTP Config: ${emailHost}:${emailPort}, secure: ${isSecurePort}, authMethod: PLAIN`);
       console.log(`[Contact Form] Email user: ${normalizedUser.substring(0, 3)}***@${normalizedUser.split('@')[1] || 'unknown'}`);
       console.log(`[Contact Form] Password length: ${normalizedPass.length} chars`);
-      console.log(`[Contact Form] Password contains special chars: ${/[^a-zA-Z0-9]/.test(normalizedPass)}`);
+      console.log(`[Contact Form] Password is exactly 12 chars: ${normalizedPass.length === 12}`);
 
       // Verify transporter configuration
       try {
@@ -186,11 +197,14 @@ export default async (req, res) => {
         // If it's an authentication error, provide specific guidance
         if (verifyError.message && verifyError.message.includes("535")) {
           console.error("[Contact Form] ===== AUTHENTICATION TROUBLESHOOTING =====");
-          console.error("[Contact Form] 1. Verify you're using a Zoho App Password (16 chars), not regular password");
+          console.error("[Contact Form] 1. Verify you're using a Zoho App Password (12 chars), not regular password");
           console.error("[Contact Form] 2. Check if Zoho account has IP restrictions - Contabo IP might be blocked");
           console.error("[Contact Form] 3. Verify email format: must be full address (user@domain.com)");
           console.error("[Contact Form] 4. Check Zoho account security settings for SMTP access");
           console.error("[Contact Form] 5. Try generating a new App Password");
+          console.error("[Contact Form] 6. Verify password has no spaces or special characters (should be 12 alphanumeric chars)");
+          console.error("[Contact Form] 7. Check Zoho account type - some accounts may have SMTP disabled");
+          console.error("[Contact Form] 8. Try port 465 instead of 587 (set CONTACT_EMAIL_PORT=465)");
           console.error("[Contact Form] ===========================================");
         }
         
