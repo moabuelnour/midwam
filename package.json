@@ -38,6 +38,7 @@
         "normalize-wheel": "^1.0.1",
         "nuxt": "^2.14.3",
         "pizzicato": "^0.6.4",
+        "resend": "^6.4.2",
         "simplex-noise": "^2.4.0",
         "swiper": "^8.4.7",
         "three": "^0.120.1",
