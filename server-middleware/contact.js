@@ -180,10 +180,16 @@ export default async (req, res) => {
         socketTimeout: 20000
       });
       
-      // Debug: Log what we're actually sending (masked)
-      const authString = Buffer.from(`${normalizedUser}\0${normalizedPass}`).toString('base64');
-      console.log(`[Contact Form] Auth string length (base64): ${authString.length} chars`);
-      console.log(`[Contact Form] Auth string preview: ${authString.substring(0, 10)}...${authString.substring(authString.length - 10)}`);
+      // Debug: Verify credentials format
+      console.log(`[Contact Form] Credential check:`);
+      console.log(`[Contact Form] - Email: ${normalizedUser} (length: ${normalizedUser.length})`);
+      console.log(`[Contact Form] - Password: ${normalizedPass.substring(0, 2)}***${normalizedPass.substring(normalizedPass.length - 2)} (length: ${normalizedPass.length})`);
+      console.log(`[Contact Form] - Email contains @: ${normalizedUser.includes('@')}`);
+      console.log(`[Contact Form] - Password is 12 chars: ${normalizedPass.length === 12}`);
+      
+      // Test if credentials work by creating a test auth string
+      const testAuth = Buffer.from(`${normalizedUser}\0${normalizedPass}`).toString('base64');
+      console.log(`[Contact Form] - Base64 auth string length: ${testAuth.length} (should be ~60 for 33+12 char credentials)`);
       
       // Log configuration for debugging (without exposing password)
       console.log(`[Contact Form] SMTP Config: ${emailHost}:${portNum}, secure: ${isSecurePort} (${isSecurePort ? 'SSL' : 'STARTTLS'}), authMethod: auto-detect`);
@@ -202,7 +208,13 @@ export default async (req, res) => {
         console.error("[Contact Form] Full error:", JSON.stringify(verifyError, null, 2));
         
         // If it's an authentication error, try alternative auth methods
-        if (verifyError.message && verifyError.message.includes("535")) {
+        const isAuthError = verifyError.message && (
+          verifyError.message.includes("535") || 
+          verifyError.message.includes("authentication") ||
+          verifyError.code === "EAUTH"
+        );
+        
+        if (isAuthError) {
           console.error("[Contact Form] ===== AUTHENTICATION TROUBLESHOOTING =====");
           console.error("[Contact Form] Trying alternative authentication methods...");
           
