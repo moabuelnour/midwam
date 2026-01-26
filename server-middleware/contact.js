@@ -1,4 +1,8 @@
 import nodemailer from "nodemailer";
+import dotenv from "dotenv";
+
+// Load environment variables explicitly for server middleware
+dotenv.config();
 import { readFileSync } from "fs";
 import { resolve } from "path";
 
@@ -96,7 +100,17 @@ export default async (req, res) => {
       const emailUser = (process.env.CONTACT_EMAIL_USER || "trivedibhavya1997@gmail.com").trim();
       const emailPass = (process.env.CONTACT_EMAIL_PASS || "zqickmgtugxhrzxo").trim();
       const emailTo = (process.env.CONTACT_EMAIL_TO || emailUser).trim();
+      const emailHost = (process.env.CONTACT_EMAIL_HOST || "smtp.zoho.com").trim();
+      const emailPort = (process.env.CONTACT_EMAIL_PORT || 465);
 
+      // Debug: Log credential status (without exposing password)
+      // console.log("[Contact Form] Email config check:");
+      // console.log("[Contact Form] CONTACT_EMAIL_USER:", process.env.CONTACT_EMAIL_USER ? "SET" : "NOT SET (using default)");
+      // console.log("[Contact Form] CONTACT_EMAIL_PASS:", process.env.CONTACT_EMAIL_PASS ? "SET" : "NOT SET (using default)");
+      // console.log("[Contact Form] CONTACT_EMAIL_TO:", process.env.CONTACT_EMAIL_TO ? "SET" : "NOT SET (using default)");
+      // console.log("[Contact Form] Using email user:", emailUser);
+      // console.log("[Contact Form] Password length:", emailPass ? emailPass.length : 0);
+      // console.log("[Contact Form] Sending to:", emailTo);
       // Validate credentials are present
       if (!emailUser || !emailPass) {
         throw new Error("Email credentials are missing. Please set CONTACT_EMAIL_USER and CONTACT_EMAIL_PASS environment variables.");
@@ -107,10 +121,12 @@ export default async (req, res) => {
       console.log(`[Contact Form] Using ${usingEnvVars ? 'environment variables' : 'default credentials'} for email: ${emailUser.substring(0, 3)}***`);
 
       const transporter = nodemailer.createTransport({
-        service: "gmail",
+        host: emailHost,
+        port: emailPort,
+        secure: true,
         auth: {
-          user: emailUser,
-          pass: emailPass
+          user: emailUser,  // your email e.g. info@yourdomain.com
+          pass: emailPass   // your app password
         },
         tls: {
           rejectUnauthorized: false
