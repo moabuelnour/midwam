@@ -159,7 +159,8 @@ export default async (req, res) => {
       console.log(`[Contact Form] Password is alphanumeric only: ${/^[a-zA-Z0-9]+$/.test(normalizedPass)}`);
       
       // Try different authentication methods - Zoho sometimes requires specific format
-      const transporter = nodemailer.createTransport({
+      // Try without specifying authMethod first (let nodemailer choose)
+      let transporter = nodemailer.createTransport({
         host: emailHost,
         port: portNum, // Use numeric port
         secure: isSecurePort, // true for 465 (SSL), false for 587 (STARTTLS)
@@ -167,7 +168,6 @@ export default async (req, res) => {
           user: normalizedUser,  // Full email address for Zoho (e.g., it@domain.com)
           pass: normalizedPass   // Zoho App Password (12 chars, no spaces)
         },
-        authMethod: 'PLAIN', // Explicitly use PLAIN auth method
         tls: {
           rejectUnauthorized: false,
           minVersion: 'TLSv1.2'
@@ -175,13 +175,18 @@ export default async (req, res) => {
         // For port 587 (STARTTLS)
         ...(isSecurePort ? {} : { requireTLS: true }),
         // Connection timeout
-        connectionTimeout: 15000,
-        greetingTimeout: 15000,
-        socketTimeout: 15000
+        connectionTimeout: 20000,
+        greetingTimeout: 20000,
+        socketTimeout: 20000
       });
       
+      // Debug: Log what we're actually sending (masked)
+      const authString = Buffer.from(`${normalizedUser}\0${normalizedPass}`).toString('base64');
+      console.log(`[Contact Form] Auth string length (base64): ${authString.length} chars`);
+      console.log(`[Contact Form] Auth string preview: ${authString.substring(0, 10)}...${authString.substring(authString.length - 10)}`);
+      
       // Log configuration for debugging (without exposing password)
-      console.log(`[Contact Form] SMTP Config: ${emailHost}:${portNum}, secure: ${isSecurePort} (${isSecurePort ? 'SSL' : 'STARTTLS'}), authMethod: PLAIN`);
+      console.log(`[Contact Form] SMTP Config: ${emailHost}:${portNum}, secure: ${isSecurePort} (${isSecurePort ? 'SSL' : 'STARTTLS'}), authMethod: auto-detect`);
       console.log(`[Contact Form] Email user: ${normalizedUser.substring(0, 3)}***@${normalizedUser.split('@')[1] || 'unknown'}`);
       console.log(`[Contact Form] Password length: ${normalizedPass.length} chars`);
       console.log(`[Contact Form] Password is exactly 12 chars: ${normalizedPass.length === 12}`);
@@ -196,22 +201,77 @@ export default async (req, res) => {
         console.error("[Contact Form] Error code:", verifyError.code);
         console.error("[Contact Form] Full error:", JSON.stringify(verifyError, null, 2));
         
-        // If it's an authentication error, provide specific guidance
+        // If it's an authentication error, try alternative auth methods
         if (verifyError.message && verifyError.message.includes("535")) {
           console.error("[Contact Form] ===== AUTHENTICATION TROUBLESHOOTING =====");
-          console.error("[Contact Form] 1. Verify you're using a Zoho App Password (12 chars), not regular password");
-          console.error("[Contact Form] 2. Check if Zoho account has IP restrictions - Contabo IP might be blocked");
-          console.error("[Contact Form] 3. Verify email format: must be full address (user@domain.com)");
-          console.error("[Contact Form] 4. Check Zoho account security settings for SMTP access");
-          console.error("[Contact Form] 5. Try generating a new App Password");
-          console.error("[Contact Form] 6. Verify password has no spaces or special characters (should be 12 alphanumeric chars)");
-          console.error("[Contact Form] 7. Check Zoho account type - some accounts may have SMTP disabled");
-          console.error("[Contact Form] 8. Try port 465 instead of 587 (set CONTACT_EMAIL_PORT=465)");
-          console.error("[Contact Form] ===========================================");
+          console.error("[Contact Form] Trying alternative authentication methods...");
+          
+          // Try with explicit PLAIN auth
+          try {
+            console.log("[Contact Form] Retrying with PLAIN auth method...");
+            transporter = nodemailer.createTransport({
+              host: emailHost,
+              port: portNum,
+              secure: isSecurePort,
+              auth: {
+                user: normalizedUser,
+                pass: normalizedPass
+              },
+              authMethod: 'PLAIN',
+              tls: {
+                rejectUnauthorized: false,
+                minVersion: 'TLSv1.2'
+              },
+              ...(isSecurePort ? {} : { requireTLS: true }),
+              connectionTimeout: 20000,
+              greetingTimeout: 20000,
+              socketTimeout: 20000
+            });
+            await transporter.verify();
+            console.log("[Contact Form] ✅ Success with PLAIN auth method!");
+          } catch (plainError) {
+            console.error("[Contact Form] PLAIN auth also failed:", plainError.message);
+            
+            // Try with LOGIN auth
+            try {
+              console.log("[Contact Form] Retrying with LOGIN auth method...");
+              transporter = nodemailer.createTransport({
+                host: emailHost,
+                port: portNum,
+                secure: isSecurePort,
+                auth: {
+                  user: normalizedUser,
+                  pass: normalizedPass
+                },
+                authMethod: 'LOGIN',
+                tls: {
+                  rejectUnauthorized: false,
+                  minVersion: 'TLSv1.2'
+                },
+                ...(isSecurePort ? {} : { requireTLS: true }),
+                connectionTimeout: 20000,
+                greetingTimeout: 20000,
+                socketTimeout: 20000
+              });
+              await transporter.verify();
+              console.log("[Contact Form] ✅ Success with LOGIN auth method!");
+            } catch (loginError) {
+              console.error("[Contact Form] LOGIN auth also failed:", loginError.message);
+              console.error("[Contact Form] ===== ALL AUTH METHODS FAILED =====");
+              console.error("[Contact Form] 1. Verify you're using a Zoho App Password (12 chars), not regular password");
+              console.error("[Contact Form] 2. Check Zoho account settings - ensure SMTP is enabled");
+              console.error("[Contact Form] 3. Verify email format: must be full address (user@domain.com)");
+              console.error("[Contact Form] 4. Try generating a new App Password");
+              console.error("[Contact Form] 5. Check if Zoho account has any security restrictions");
+              console.error("[Contact Form] 6. Contact Zoho support - credentials work locally but not on server");
+              console.error("[Contact Form] ===========================================");
+              throw verifyError; // Throw original error
+            }
+          }
+        } else {
+          // For non-auth errors, throw immediately
+          throw verifyError;
         }
-        
-        // Throw the error so it's caught by the outer catch block
-        throw verifyError;
       }
 
       const mailOptions = {
