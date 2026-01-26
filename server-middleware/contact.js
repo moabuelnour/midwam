@@ -1,4 +1,4 @@
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 import dotenv from "dotenv";
 
 // Load environment variables explicitly for server middleware
@@ -96,198 +96,26 @@ export default async (req, res) => {
       // Build phone dynamically
       const phone = data.phone || "Not provided";
 
-      // Get email credentials from environment variables or use defaults
-      const emailUser = (process.env.CONTACT_EMAIL_USER || "trivedibhavya1997@gmail.com").trim();
-      const emailPassRaw = process.env.CONTACT_EMAIL_PASS || "zqickmgtugxhrzxo";
-      const emailPass = emailPassRaw.trim();
-      const emailTo = (process.env.CONTACT_EMAIL_TO || emailUser).trim();
-      const emailHost = (process.env.CONTACT_EMAIL_HOST || "smtp.zoho.com").trim();
-      const emailPort = parseInt(process.env.CONTACT_EMAIL_PORT || 587, 10);
-      
-      // Debug: Check raw password before processing
-      console.log(`[Contact Form] Raw password from env: length=${emailPassRaw.length}, hasWhitespace=${/\s/.test(emailPassRaw)}`);
-      console.log(`[Contact Form] Trimmed password: length=${emailPass.length}`);
-      console.log(`[Contact Form] Password first 3 chars: ${emailPass.substring(0, 3)}***`);
-      console.log(`[Contact Form] Password last 3 chars: ***${emailPass.substring(emailPass.length - 3)}`);
-      console.log(`[Contact Form] Password contains non-printable: ${/[^\x20-\x7E]/.test(emailPass)}`);
+      // Get Resend API key and email settings from environment variables
+      const resendApiKey = process.env.RESEND_API_KEY;
+      const emailFrom = (process.env.CONTACT_EMAIL_FROM || process.env.CONTACT_EMAIL_USER || "onboarding@resend.dev").trim();
+      const emailTo = (process.env.CONTACT_EMAIL_TO || emailFrom).trim();
 
-      // Debug: Log credential status (without exposing password)
-      // console.log("[Contact Form] Email config check:");
-      // console.log("[Contact Form] CONTACT_EMAIL_USER:", process.env.CONTACT_EMAIL_USER ? "SET" : "NOT SET (using default)");
-      // console.log("[Contact Form] CONTACT_EMAIL_PASS:", process.env.CONTACT_EMAIL_PASS ? "SET" : "NOT SET (using default)");
-      // console.log("[Contact Form] CONTACT_EMAIL_TO:", process.env.CONTACT_EMAIL_TO ? "SET" : "NOT SET (using default)");
-      // console.log("[Contact Form] Using email user:", emailUser);
-      // console.log("[Contact Form] Password length:", emailPass ? emailPass.length : 0);
-      // console.log("[Contact Form] Sending to:", emailTo);
-      // Zoho App Passwords are 12 characters (displayed with spaces like "RGRW EAps v6qL", but stored without)
-      // Remove any spaces from the password
-      const cleanedPass = emailPass.replace(/\s+/g, '');
-      const passLength = cleanedPass.length;
-      
-      // Validate credentials are present
-      if (!emailUser || !cleanedPass) {
-        throw new Error("Email credentials are missing. Please set CONTACT_EMAIL_USER and CONTACT_EMAIL_PASS environment variables.");
-      }
-      
-      if (passLength !== 12) {
-        console.warn(`[Contact Form] WARNING: Password length is ${passLength} characters after removing spaces. Zoho App Passwords are 12 characters.`);
-        console.warn(`[Contact Form] If you're using a regular password, it won't work. Generate an App Password at: https://accounts.zoho.com/home#security/app-passwords`);
-      } else {
-        console.log(`[Contact Form] Password length is correct (12 characters) for Zoho App Password`);
+      // Validate Resend API key is present
+      if (!resendApiKey) {
+        throw new Error("RESEND_API_KEY environment variable is missing. Please set it in your .env file.");
       }
 
-      // Log that we're using environment variables (without exposing sensitive data)
-      const usingEnvVars = !!(process.env.CONTACT_EMAIL_USER && process.env.CONTACT_EMAIL_PASS);
-      console.log(`[Contact Form] Using ${usingEnvVars ? 'environment variables' : 'default credentials'} for email: ${emailUser.substring(0, 3)}***`);
+      // Initialize Resend client
+      const resend = new Resend(resendApiKey);
 
-      // Zoho SMTP configuration
-      // Port 465 uses SSL (secure: true)
-      // Port 587 uses STARTTLS (secure: false, requireTLS: true)
-      // Ensure port is a number for comparison
-      const portNum = parseInt(emailPort, 10);
-      const isSecurePort = portNum === 465;
-      
-      // Normalize credentials - remove any hidden characters
-      const normalizedUser = emailUser.trim().replace(/[\r\n\t]/g, '');
-      // For password, remove line breaks and ensure it's clean (spaces already removed above)
-      const normalizedPass = cleanedPass.replace(/[\r\n\t]/g, '').trim();
-      
-      // Additional debugging - check what we're actually sending
-      console.log(`[Contact Form] After normalization - User length: ${normalizedUser.length}, Pass length: ${normalizedPass.length}`);
-      console.log(`[Contact Form] User email format: ${normalizedUser.includes('@') ? 'Valid (contains @)' : 'INVALID (no @)'}`);
-      console.log(`[Contact Form] User domain: ${normalizedUser.split('@')[1] || 'NONE'}`);
-      console.log(`[Contact Form] Password is alphanumeric only: ${/^[a-zA-Z0-9]+$/.test(normalizedPass)}`);
-      
-      // Try different authentication methods - Zoho sometimes requires specific format
-      // Try without specifying authMethod first (let nodemailer choose)
-      let transporter = nodemailer.createTransport({
-        host: emailHost,
-        port: portNum, // Use numeric port
-        secure: isSecurePort, // true for 465 (SSL), false for 587 (STARTTLS)
-        auth: {
-          user: normalizedUser,  // Full email address for Zoho (e.g., it@domain.com)
-          pass: normalizedPass   // Zoho App Password (12 chars, no spaces)
-        },
-        tls: {
-          rejectUnauthorized: false,
-          minVersion: 'TLSv1.2'
-        },
-        // For port 587 (STARTTLS)
-        ...(isSecurePort ? {} : { requireTLS: true }),
-        // Connection timeout
-        connectionTimeout: 20000,
-        greetingTimeout: 20000,
-        socketTimeout: 20000
-      });
-      
-      // Debug: Verify credentials format
-      console.log(`[Contact Form] Credential check:`);
-      console.log(`[Contact Form] - Email: ${normalizedUser} (length: ${normalizedUser.length})`);
-      console.log(`[Contact Form] - Password: ${normalizedPass.substring(0, 2)}***${normalizedPass.substring(normalizedPass.length - 2)} (length: ${normalizedPass.length})`);
-      console.log(`[Contact Form] - Email contains @: ${normalizedUser.includes('@')}`);
-      console.log(`[Contact Form] - Password is 12 chars: ${normalizedPass.length === 12}`);
-      
-      // Test if credentials work by creating a test auth string
-      const testAuth = Buffer.from(`${normalizedUser}\0${normalizedPass}`).toString('base64');
-      console.log(`[Contact Form] - Base64 auth string length: ${testAuth.length} (should be ~60 for 33+12 char credentials)`);
-      
-      // Log configuration for debugging (without exposing password)
-      console.log(`[Contact Form] SMTP Config: ${emailHost}:${portNum}, secure: ${isSecurePort} (${isSecurePort ? 'SSL' : 'STARTTLS'}), authMethod: auto-detect`);
-      console.log(`[Contact Form] Email user: ${normalizedUser.substring(0, 3)}***@${normalizedUser.split('@')[1] || 'unknown'}`);
-      console.log(`[Contact Form] Password length: ${normalizedPass.length} chars`);
-      console.log(`[Contact Form] Password is exactly 12 chars: ${normalizedPass.length === 12}`);
+      console.log(`[Contact Form] Using Resend API`);
+      console.log(`[Contact Form] From: ${emailFrom}`);
+      console.log(`[Contact Form] To: ${emailTo}`);
 
-      // Verify transporter configuration
-      try {
-        console.log("[Contact Form] Attempting SMTP connection verification...");
-        await transporter.verify();
-        console.log("[Contact Form] SMTP connection verified successfully");
-      } catch (verifyError) {
-        console.error("[Contact Form] Transporter verification failed:", verifyError.message);
-        console.error("[Contact Form] Error code:", verifyError.code);
-        console.error("[Contact Form] Full error:", JSON.stringify(verifyError, null, 2));
-        
-        // If it's an authentication error, try alternative auth methods
-        const isAuthError = verifyError.message && (
-          verifyError.message.includes("535") || 
-          verifyError.message.includes("authentication") ||
-          verifyError.code === "EAUTH"
-        );
-        
-        if (isAuthError) {
-          console.error("[Contact Form] ===== AUTHENTICATION TROUBLESHOOTING =====");
-          console.error("[Contact Form] Trying alternative authentication methods...");
-          
-          // Try with explicit PLAIN auth
-          try {
-            console.log("[Contact Form] Retrying with PLAIN auth method...");
-            transporter = nodemailer.createTransport({
-              host: emailHost,
-              port: portNum,
-              secure: isSecurePort,
-              auth: {
-                user: normalizedUser,
-                pass: normalizedPass
-              },
-              authMethod: 'PLAIN',
-              tls: {
-                rejectUnauthorized: false,
-                minVersion: 'TLSv1.2'
-              },
-              ...(isSecurePort ? {} : { requireTLS: true }),
-              connectionTimeout: 20000,
-              greetingTimeout: 20000,
-              socketTimeout: 20000
-            });
-            await transporter.verify();
-            console.log("[Contact Form] ✅ Success with PLAIN auth method!");
-          } catch (plainError) {
-            console.error("[Contact Form] PLAIN auth also failed:", plainError.message);
-            
-            // Try with LOGIN auth
-            try {
-              console.log("[Contact Form] Retrying with LOGIN auth method...");
-              transporter = nodemailer.createTransport({
-                host: emailHost,
-                port: portNum,
-                secure: isSecurePort,
-                auth: {
-                  user: normalizedUser,
-                  pass: normalizedPass
-                },
-                authMethod: 'LOGIN',
-                tls: {
-                  rejectUnauthorized: false,
-                  minVersion: 'TLSv1.2'
-                },
-                ...(isSecurePort ? {} : { requireTLS: true }),
-                connectionTimeout: 20000,
-                greetingTimeout: 20000,
-                socketTimeout: 20000
-              });
-              await transporter.verify();
-              console.log("[Contact Form] ✅ Success with LOGIN auth method!");
-            } catch (loginError) {
-              console.error("[Contact Form] LOGIN auth also failed:", loginError.message);
-              console.error("[Contact Form] ===== ALL AUTH METHODS FAILED =====");
-              console.error("[Contact Form] 1. Verify you're using a Zoho App Password (12 chars), not regular password");
-              console.error("[Contact Form] 2. Check Zoho account settings - ensure SMTP is enabled");
-              console.error("[Contact Form] 3. Verify email format: must be full address (user@domain.com)");
-              console.error("[Contact Form] 4. Try generating a new App Password");
-              console.error("[Contact Form] 5. Check if Zoho account has any security restrictions");
-              console.error("[Contact Form] 6. Contact Zoho support - credentials work locally but not on server");
-              console.error("[Contact Form] ===========================================");
-              throw verifyError; // Throw original error
-            }
-          }
-        } else {
-          // For non-auth errors, throw immediately
-          throw verifyError;
-        }
-      }
-
-      const mailOptions = {
-        from: `"Website Contact Form" <${emailUser}>`,
+      // Send email using Resend API
+      const emailData = await resend.emails.send({
+        from: `"Website Contact Form" <${emailFrom}>`,
         to: emailTo,
         subject: "New Contact Form Submission",
         html: `
@@ -305,14 +133,9 @@ export default async (req, res) => {
              This email was generated automatically from your website contact form.
           </p>
         `
-      };
-
-      const info = await transporter.sendMail(mailOptions);
+      });
       
-      // Minimal logging for debugging
-      if (!info.messageId) {
-        console.error("[Contact Form] Email sent but no message ID returned");
-      }
+      console.log(`[Contact Form] Email sent successfully via Resend. ID: ${emailData.id || 'N/A'}`);
 
       res.statusCode = 200;
       res.end(JSON.stringify({ success: true }));
@@ -321,24 +144,12 @@ export default async (req, res) => {
       console.error("[Contact Form] Error:", e.message);
       console.error("[Contact Form] Stack:", e.stack);
       
-      // Provide more helpful error messages for authentication issues
+      // Provide helpful error messages
       let errorMessage = "Failed to send email. Please try again later.";
-      const isAuthError = e.message && (
-        e.message.includes("authentication") || 
-        e.message.includes("Invalid login") ||
-        e.message.includes("535")
-      );
       
-      if (isAuthError) {
-        errorMessage = "Failed to send email. Please try again later.";
-        console.error("[Contact Form] Authentication error detected");
-        console.error("[Contact Form] Check that CONTACT_EMAIL_USER and CONTACT_EMAIL_PASS are set correctly in production");
-        console.error("[Contact Form] Email user:", process.env.CONTACT_EMAIL_USER ? `${process.env.CONTACT_EMAIL_USER.substring(0, 3)}***` : "NOT SET");
-        console.error("[Contact Form] Email pass:", process.env.CONTACT_EMAIL_PASS ? "SET (length: " + process.env.CONTACT_EMAIL_PASS.length + ")" : "NOT SET");
-        console.error("[Contact Form] Using .env file:", process.env.CONTACT_EMAIL_USER ? "No (using process.env)" : "Yes (or defaults)");
-        console.error("[Contact Form] IMPORTANT: For Zoho, you MUST use an App Password, not your regular password!");
-        console.error("[Contact Form] Generate App Password at: https://accounts.zoho.com/home#security/app-passwords");
-        console.error("[Contact Form] Also verify: email must be full address (e.g., it@domain.com), not just username");
+      if (e.message && e.message.includes("RESEND_API_KEY")) {
+        errorMessage = "Email service configuration error. Please contact support.";
+        console.error("[Contact Form] Resend API key is missing. Set RESEND_API_KEY in environment variables.");
       } else if (process.env.NODE_ENV === "development") {
         errorMessage = e.message;
       }
