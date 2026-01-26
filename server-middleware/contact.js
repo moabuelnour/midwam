@@ -98,10 +98,18 @@ export default async (req, res) => {
 
       // Get email credentials from environment variables or use defaults
       const emailUser = (process.env.CONTACT_EMAIL_USER || "trivedibhavya1997@gmail.com").trim();
-      const emailPass = (process.env.CONTACT_EMAIL_PASS || "zqickmgtugxhrzxo").trim();
+      const emailPassRaw = process.env.CONTACT_EMAIL_PASS || "zqickmgtugxhrzxo";
+      const emailPass = emailPassRaw.trim();
       const emailTo = (process.env.CONTACT_EMAIL_TO || emailUser).trim();
       const emailHost = (process.env.CONTACT_EMAIL_HOST || "smtp.zoho.com").trim();
       const emailPort = (process.env.CONTACT_EMAIL_PORT || 587);
+      
+      // Debug: Check raw password before processing
+      console.log(`[Contact Form] Raw password from env: length=${emailPassRaw.length}, hasWhitespace=${/\s/.test(emailPassRaw)}`);
+      console.log(`[Contact Form] Trimmed password: length=${emailPass.length}`);
+      console.log(`[Contact Form] Password first 3 chars: ${emailPass.substring(0, 3)}***`);
+      console.log(`[Contact Form] Password last 3 chars: ***${emailPass.substring(emailPass.length - 3)}`);
+      console.log(`[Contact Form] Password contains non-printable: ${/[^\x20-\x7E]/.test(emailPass)}`);
 
       // Debug: Log credential status (without exposing password)
       // console.log("[Contact Form] Email config check:");
@@ -134,7 +142,10 @@ export default async (req, res) => {
       
       // Normalize credentials - remove any hidden characters
       const normalizedUser = emailUser.trim().replace(/[\r\n\t]/g, '');
-      const normalizedPass = emailPass.trim().replace(/[\r\n\t]/g, '');
+      // For password, be more careful - only remove actual line breaks, not all whitespace
+      const normalizedPass = emailPass.replace(/[\r\n]/g, '').trim();
+      
+      console.log(`[Contact Form] After normalization - User length: ${normalizedUser.length}, Pass length: ${normalizedPass.length}`);
       
       const transporter = nodemailer.createTransport({
         host: emailHost,
