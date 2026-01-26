@@ -116,6 +116,13 @@ export default async (req, res) => {
         throw new Error("Email credentials are missing. Please set CONTACT_EMAIL_USER and CONTACT_EMAIL_PASS environment variables.");
       }
 
+      // Warn if password length suggests it's not a Zoho App Password
+      const passLength = emailPass.trim().length;
+      if (passLength !== 16) {
+        console.warn(`[Contact Form] WARNING: Password length is ${passLength} characters. Zoho App Passwords are typically 16 characters.`);
+        console.warn(`[Contact Form] If you're using a regular password, it won't work. Generate an App Password at: https://accounts.zoho.com/home#security/app-passwords`);
+      }
+
       // Log that we're using environment variables (without exposing sensitive data)
       const usingEnvVars = !!(process.env.CONTACT_EMAIL_USER && process.env.CONTACT_EMAIL_PASS);
       console.log(`[Contact Form] Using ${usingEnvVars ? 'environment variables' : 'default credentials'} for email: ${emailUser.substring(0, 3)}***`);
@@ -125,30 +132,59 @@ export default async (req, res) => {
       // Port 587 uses STARTTLS (secure: false, requireTLS: true)
       const isSecurePort = emailPort === 465;
       
+      // Normalize credentials - remove any hidden characters
+      const normalizedUser = emailUser.trim().replace(/[\r\n\t]/g, '');
+      const normalizedPass = emailPass.trim().replace(/[\r\n\t]/g, '');
+      
       const transporter = nodemailer.createTransport({
         host: emailHost,
         port: emailPort,
         secure: isSecurePort, // true for 465, false for other ports
         auth: {
-          user: emailUser,  // Full email address for Zoho (e.g., it@domain.com)
-          pass: emailPass   // Zoho App Password (NOT regular password - must be generated in Zoho settings)
+          user: normalizedUser,  // Full email address for Zoho (e.g., it@domain.com)
+          pass: normalizedPass   // Zoho App Password (NOT regular password - must be generated in Zoho settings)
         },
         tls: {
-          rejectUnauthorized: false
+          rejectUnauthorized: false,
+          minVersion: 'TLSv1.2'
         },
         // For port 587 (STARTTLS)
-        ...(isSecurePort ? {} : { requireTLS: true })
+        ...(isSecurePort ? {} : { requireTLS: true }),
+        // Connection timeout
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 10000
       });
       
-      // Log configuration for debugging
-      console.log(`[Contact Form] SMTP Config: ${emailHost}:${emailPort}, secure: ${isSecurePort}, user: ${emailUser.substring(0, 3)}***`);
+      // Log configuration for debugging (without exposing password)
+      console.log(`[Contact Form] SMTP Config: ${emailHost}:${emailPort}, secure: ${isSecurePort}`);
+      console.log(`[Contact Form] Email user: ${normalizedUser.substring(0, 3)}***@${normalizedUser.split('@')[1] || 'unknown'}`);
+      console.log(`[Contact Form] Password length: ${normalizedPass.length} chars`);
+      console.log(`[Contact Form] Password contains special chars: ${/[^a-zA-Z0-9]/.test(normalizedPass)}`);
 
       // Verify transporter configuration
       try {
+        console.log("[Contact Form] Attempting SMTP connection verification...");
         await transporter.verify();
+        console.log("[Contact Form] SMTP connection verified successfully");
       } catch (verifyError) {
         console.error("[Contact Form] Transporter verification failed:", verifyError.message);
-        // Don't throw here, let it try to send anyway
+        console.error("[Contact Form] Error code:", verifyError.code);
+        console.error("[Contact Form] Full error:", JSON.stringify(verifyError, null, 2));
+        
+        // If it's an authentication error, provide specific guidance
+        if (verifyError.message && verifyError.message.includes("535")) {
+          console.error("[Contact Form] ===== AUTHENTICATION TROUBLESHOOTING =====");
+          console.error("[Contact Form] 1. Verify you're using a Zoho App Password (16 chars), not regular password");
+          console.error("[Contact Form] 2. Check if Zoho account has IP restrictions - Contabo IP might be blocked");
+          console.error("[Contact Form] 3. Verify email format: must be full address (user@domain.com)");
+          console.error("[Contact Form] 4. Check Zoho account security settings for SMTP access");
+          console.error("[Contact Form] 5. Try generating a new App Password");
+          console.error("[Contact Form] ===========================================");
+        }
+        
+        // Throw the error so it's caught by the outer catch block
+        throw verifyError;
       }
 
       const mailOptions = {
