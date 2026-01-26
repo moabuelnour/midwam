@@ -101,7 +101,7 @@ export default async (req, res) => {
       const emailPass = (process.env.CONTACT_EMAIL_PASS || "zqickmgtugxhrzxo").trim();
       const emailTo = (process.env.CONTACT_EMAIL_TO || emailUser).trim();
       const emailHost = (process.env.CONTACT_EMAIL_HOST || "smtp.zoho.com").trim();
-      const emailPort = (process.env.CONTACT_EMAIL_PORT || 465);
+      const emailPort = (process.env.CONTACT_EMAIL_PORT || 587);
 
       // Debug: Log credential status (without exposing password)
       // console.log("[Contact Form] Email config check:");
@@ -120,18 +120,28 @@ export default async (req, res) => {
       const usingEnvVars = !!(process.env.CONTACT_EMAIL_USER && process.env.CONTACT_EMAIL_PASS);
       console.log(`[Contact Form] Using ${usingEnvVars ? 'environment variables' : 'default credentials'} for email: ${emailUser.substring(0, 3)}***`);
 
+      // Zoho SMTP configuration
+      // Port 465 uses SSL (secure: true)
+      // Port 587 uses STARTTLS (secure: false, requireTLS: true)
+      const isSecurePort = emailPort === 465;
+      
       const transporter = nodemailer.createTransport({
         host: emailHost,
         port: emailPort,
-        secure: true,
+        secure: isSecurePort, // true for 465, false for other ports
         auth: {
-          user: emailUser,  // your email e.g. info@yourdomain.com
-          pass: emailPass   // your app password
+          user: emailUser,  // Full email address for Zoho (e.g., it@domain.com)
+          pass: emailPass   // Zoho App Password (NOT regular password - must be generated in Zoho settings)
         },
         tls: {
           rejectUnauthorized: false
-        }
+        },
+        // For port 587 (STARTTLS)
+        ...(isSecurePort ? {} : { requireTLS: true })
       });
+      
+      // Log configuration for debugging
+      console.log(`[Contact Form] SMTP Config: ${emailHost}:${emailPort}, secure: ${isSecurePort}, user: ${emailUser.substring(0, 3)}***`);
 
       // Verify transporter configuration
       try {
@@ -191,6 +201,9 @@ export default async (req, res) => {
         console.error("[Contact Form] Email user:", process.env.CONTACT_EMAIL_USER ? `${process.env.CONTACT_EMAIL_USER.substring(0, 3)}***` : "NOT SET");
         console.error("[Contact Form] Email pass:", process.env.CONTACT_EMAIL_PASS ? "SET (length: " + process.env.CONTACT_EMAIL_PASS.length + ")" : "NOT SET");
         console.error("[Contact Form] Using .env file:", process.env.CONTACT_EMAIL_USER ? "No (using process.env)" : "Yes (or defaults)");
+        console.error("[Contact Form] IMPORTANT: For Zoho, you MUST use an App Password, not your regular password!");
+        console.error("[Contact Form] Generate App Password at: https://accounts.zoho.com/home#security/app-passwords");
+        console.error("[Contact Form] Also verify: email must be full address (e.g., it@domain.com), not just username");
       } else if (process.env.NODE_ENV === "development") {
         errorMessage = e.message;
       }
